@@ -1,0 +1,17 @@
+import math
+empty_list = []
+mar_list = []
+def main(num):
+    while True and num < 66:
+        isprime = True
+        for x in range(2, int(math.sqrt(num) + 1)):
+            if num % x == 0: 
+                isprime = False
+                break
+        if isprime:
+            empty_list.append(num)
+            mar_list.append(2**num-1)
+        num += 1
+    print(empty_list)
+    print(mar_list)
+main(3)
