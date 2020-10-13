@@ -1,0 +1,115 @@
+%logstop
+%logstart -rtq ~/.logs/ip.py append
+%matplotlib inline
+import matplotlib
+import seaborn as sns
+sns.set()
+matplotlib.rcParams['figure.dpi'] = 144
+
+def mersenne_number(p):
+    return 2**p-1
+
+#basic way to get prime numbers using marsenne and sqrt
+import math
+empty_list = [] 
+mar_list = []
+def main(num):
+    while True and num < 66:
+        isprime = True
+        for x in range(2, int(math.sqrt(num) + 1)):
+            if num % x == 0: 
+                isprime = False
+                break
+        if isprime:
+            empty_list.append(num)
+            mar_list.append(2**num-1)
+        num += 1
+    print(empty_list)
+    print(mar_list)
+main(3)
+
+#test if a number is prime and get all prime numbers within a range
+def is_prime(number):
+    if number <= 1:
+        return False
+    
+    for factor in range(2, number):
+        if number % factor == 0:
+            return False
+
+    return True
+
+def get_primes(m, n):
+    return [number for number in range(m, n) if is_prime(number)]
+
+#lucas  lehmer list
+lucas_list = []
+def lucas_lehmer(p): 
+    ll_seq = [4]
+    if p>2:
+        for i in range(1, (p-2)+1):
+            n_i = ((ll_seq[i-1]) ** 2 - 2) % ((2 ** p) - 1)
+            ll_seq.append(n_i)
+    return ll_seq
+        
+lucas_lehmer(17)
+
+#mersenne test using lucas lehmer
+def ll_prime(p):
+    lucas_lehmer_seq = lucas_lehmer(p)
+    if lucas_lehmer_seq[p-2] == 0:
+        return 1
+    else:
+        return 0
+
+#better is prime function
+import math
+def is_prime_fast(number):
+    if number < 2:
+        return False
+    if number == 2:
+        return True
+    for divisor in range(2,int(math.sqrt(number))+1):
+        if number % divisor == 0:
+            return False
+    return True
+
+%%timeit
+is_prime_fast(67867967)
+
+def get_primes_fast(n):
+    return [number for number in range(n) if is_prime_fast(number)]
+    
+#Sieve to get prime numbers in steps
+#state list and return false for 0 and 1
+def list_true(n):
+    return [False if i<2 else True for i in range(n+1)]
+
+#mark false in list if multiple of p
+def mark_false(bool_list, p):
+    for i in range(2*p, len(bool_list), p):
+        bool_list[i] = False
+    return bool_list
+
+#find the next index with a true value when index is greater than p
+def find_next(bool_list, p):
+    for i, value in enumerate(bool_list):
+        if value == True and i > p:
+            return i
+    return None  
+
+#list out those values for true indices 
+def prime_from_list(bool_list):
+    return [i for i, value in enumerate(bool_list) if value]
+    
+#combine it all together
+def sieve(n):
+    bool_list = list_true(n)
+    p = 2
+    while p is not None:
+        bool_list = mark_false(bool_list, p)
+        p = find_next(bool_list, p)
+    return prime_from_list(bool_list)
+
+#test it
+assert sieve(1000) == get_primes(0, 1000)
