@@ -1,0 +1,543 @@
+%logstop
+%logstart -rtq ~/.logs/pw.py append
+%matplotlib inline
+import matplotlib
+import seaborn as sns
+sns.set()
+matplotlib.rcParams['figure.dpi'] = 144
+from static_grader import grader
+PW Miniproject
+Introduction
+The objective of this miniproject is to exercise your ability to use basic Python data structures, define functions, and control program flow. We will be using these concepts to perform some fundamental data wrangling tasks such as joining data sets together, splitting data into groups, and aggregating data into summary statistics. Please do not use pandas or numpy to answer these questions.
+
+We will be working with medical data from the British NHS on prescription drugs. Since this is real data, it contains many ambiguities that we will need to confront in our analysis. This is commonplace in data science, and is one of the lessons you will learn in this miniproject.
+
+Downloading the data
+We first need to download the data we'll be using from Amazon S3:
+
+%%bash
+mkdir pw-data
+wget http://dataincubator-wqu.s3.amazonaws.com/pwdata/201701scripts_sample.json.gz -nc -P ./pw-data
+wget http://dataincubator-wqu.s3.amazonaws.com/pwdata/practices.json.gz -nc -P ./pw-data
+--2020-10-23 17:54:29--  http://dataincubator-wqu.s3.amazonaws.com/pwdata/201701scripts_sample.json.gz
+Resolving dataincubator-wqu.s3.amazonaws.com (dataincubator-wqu.s3.amazonaws.com)... 52.217.82.68
+Connecting to dataincubator-wqu.s3.amazonaws.com (dataincubator-wqu.s3.amazonaws.com)|52.217.82.68|:80... connected.
+HTTP request sent, awaiting response... 200 OK
+Length: 10367709 (9.9M) [application/json]
+Saving to: ‘./pw-data/201701scripts_sample.json.gz’
+
+     0K .......... .......... .......... .......... ..........  0% 45.6M 0s
+    50K .......... .......... .......... .......... ..........  0% 42.9M 0s
+   100K .......... .......... .......... .......... ..........  1% 42.8M 0s
+   150K .......... .......... .......... .......... ..........  1% 43.3M 0s
+   200K .......... .......... .......... .......... ..........  2% 50.3M 0s
+   250K .......... .......... .......... .......... ..........  2% 55.2M 0s
+   300K .......... .......... .......... .......... ..........  3% 39.5M 0s
+   350K .......... .......... .......... .......... ..........  3% 52.7M 0s
+   400K .......... .......... .......... .......... ..........  4%  101M 0s
+   450K .......... .......... .......... .......... ..........  4%  290M 0s
+   500K .......... .......... .......... .......... ..........  5%  219M 0s
+   550K .......... .......... .......... .......... ..........  5%  230M 0s
+   600K .......... .......... .......... .......... ..........  6%  295M 0s
+   650K .......... .......... .......... .......... ..........  6% 36.3M 0s
+   700K .......... .......... .......... .......... ..........  7% 42.3M 0s
+   750K .......... .......... .......... .......... ..........  7% 49.4M 0s
+   800K .......... .......... .......... .......... ..........  8% 72.4M 0s
+   850K .......... .......... .......... .......... ..........  8%  218M 0s
+   900K .......... .......... .......... .......... ..........  9%  304M 0s
+   950K .......... .......... .......... .......... ..........  9%  382M 0s
+  1000K .......... .......... .......... .......... .......... 10%  263M 0s
+  1050K .......... .......... .......... .......... .......... 10%  221M 0s
+  1100K .......... .......... .......... .......... .......... 11%  294M 0s
+  1150K .......... .......... .......... .......... .......... 11%  269M 0s
+  1200K .......... .......... .......... .......... .......... 12%  105M 0s
+  1250K .......... .......... .......... .......... .......... 12% 39.3M 0s
+  1300K .......... .......... .......... .......... .......... 13% 37.7M 0s
+  1350K .......... .......... .......... .......... .......... 13% 48.6M 0s
+  1400K .......... .......... .......... .......... .......... 14% 41.6M 0s
+  1450K .......... .......... .......... .......... .......... 14% 34.5M 0s
+  1500K .......... .......... .......... .......... .......... 15% 33.4M 0s
+  1550K .......... .......... .......... .......... .......... 15% 65.2M 0s
+  1600K .......... .......... .......... .......... .......... 16% 53.3M 0s
+  1650K .......... .......... .......... .......... .......... 16%  122M 0s
+  1700K .......... .......... .......... .......... .......... 17%  266M 0s
+  1750K .......... .......... .......... .......... .......... 17%  322M 0s
+  1800K .......... .......... .......... .......... .......... 18%  315M 0s
+  1850K .......... .......... .......... .......... .......... 18%  207M 0s
+  1900K .......... .......... .......... .......... .......... 19%  240M 0s
+  1950K .......... .......... .......... .......... .......... 19%  360M 0s
+  2000K .......... .......... .......... .......... .......... 20%  182M 0s
+  2050K .......... .......... .......... .......... .......... 20%  351M 0s
+  2100K .......... .......... .......... .......... .......... 21%  166M 0s
+  2150K .......... .......... .......... .......... .......... 21%  283M 0s
+  2200K .......... .......... .......... .......... .......... 22%  162M 0s
+  2250K .......... .......... .......... .......... .......... 22% 32.8M 0s
+  2300K .......... .......... .......... .......... .......... 23% 39.6M 0s
+  2350K .......... .......... .......... .......... .......... 23% 37.0M 0s
+  2400K .......... .......... .......... .......... .......... 24% 50.8M 0s
+  2450K .......... .......... .......... .......... .......... 24% 68.2M 0s
+  2500K .......... .......... .......... .......... .......... 25% 41.4M 0s
+  2550K .......... .......... .......... .......... .......... 25% 70.6M 0s
+  2600K .......... .......... .......... .......... .......... 26% 75.0M 0s
+  2650K .......... .......... .......... .......... .......... 26%  313M 0s
+  2700K .......... .......... .......... .......... .......... 27%  255M 0s
+  2750K .......... .......... .......... .......... .......... 27%  284M 0s
+  2800K .......... .......... .......... .......... .......... 28%  188M 0s
+  2850K .......... .......... .......... .......... .......... 28%  178M 0s
+  2900K .......... .......... .......... .......... .......... 29%  195M 0s
+  2950K .......... .......... .......... .......... .......... 29%  294M 0s
+  3000K .......... .......... .......... .......... .......... 30%  241M 0s
+  3050K .......... .......... .......... .......... .......... 30%  232M 0s
+  3100K .......... .......... .......... .......... .......... 31%  189M 0s
+  3150K .......... .......... .......... .......... .......... 31%  185M 0s
+  3200K .......... .......... .......... .......... .......... 32%  203M 0s
+  3250K .......... .......... .......... .......... .......... 32% 78.0M 0s
+  3300K .......... .......... .......... .......... .......... 33% 32.4M 0s
+  3350K .......... .......... .......... .......... .......... 33% 37.7M 0s
+  3400K .......... .......... .......... .......... .......... 34% 42.4M 0s
+  3450K .......... .......... .......... .......... .......... 34% 68.7M 0s
+  3500K .......... .......... .......... .......... .......... 35% 39.6M 0s
+  3550K .......... .......... .......... .......... .......... 35% 65.6M 0s
+  3600K .......... .......... .......... .......... .......... 36% 63.4M 0s
+  3650K .......... .......... .......... .......... .......... 36% 54.9M 0s
+  3700K .......... .......... .......... .......... .......... 37% 60.5M 0s
+  3750K .......... .......... .......... .......... .......... 37%  309M 0s
+  3800K .......... .......... .......... .......... .......... 38%  238M 0s
+  3850K .......... .......... .......... .......... .......... 38%  356M 0s
+  3900K .......... .......... .......... .......... .......... 39%  177M 0s
+  3950K .......... .......... .......... .......... .......... 39%  239M 0s
+  4000K .......... .......... .......... .......... .......... 40%  373M 0s
+  4050K .......... .......... .......... .......... .......... 40%  202M 0s
+  4100K .......... .......... .......... .......... .......... 40%  181M 0s
+  4150K .......... .......... .......... .......... .......... 41%  240M 0s
+  4200K .......... .......... .......... .......... .......... 41% 53.6M 0s
+  4250K .......... .......... .......... .......... .......... 42% 35.8M 0s
+  4300K .......... .......... .......... .......... .......... 42% 32.6M 0s
+  4350K .......... .......... .......... .......... .......... 43% 59.7M 0s
+  4400K .......... .......... .......... .......... .......... 43% 70.2M 0s
+  4450K .......... .......... .......... .......... .......... 44% 48.8M 0s
+  4500K .......... .......... .......... .......... .......... 44% 62.2M 0s
+  4550K .......... .......... .......... .......... .......... 45% 66.9M 0s
+  4600K .......... .......... .......... .......... .......... 45%  107M 0s
+  4650K .......... .......... .......... .......... .......... 46%  163M 0s
+  4700K .......... .......... .......... .......... .......... 46%  213M 0s
+  4750K .......... .......... .......... .......... .......... 47%  285M 0s
+  4800K .......... .......... .......... .......... .......... 47%  219M 0s
+  4850K .......... .......... .......... .......... .......... 48%  282M 0s
+  4900K .......... .......... .......... .......... .......... 48% 43.2M 0s
+  4950K .......... .......... .......... .......... .......... 49% 41.3M 0s
+  5000K .......... .......... .......... .......... .......... 49% 64.0M 0s
+  5050K .......... .......... .......... .......... .......... 50% 72.5M 0s
+  5100K .......... .......... .......... .......... .......... 50% 44.3M 0s
+  5150K .......... .......... .......... .......... .......... 51% 57.0M 0s
+  5200K .......... .......... .......... .......... .......... 51%  105M 0s
+  5250K .......... .......... .......... .......... .......... 52%  309M 0s
+  5300K .......... .......... .......... .......... .......... 52%  282M 0s
+  5350K .......... .......... .......... .......... .......... 53%  355M 0s
+  5400K .......... .......... .......... .......... .......... 53%  362M 0s
+  5450K .......... .......... .......... .......... .......... 54%  358M 0s
+  5500K .......... .......... .......... .......... .......... 54%  271M 0s
+  5550K .......... .......... .......... .......... .......... 55%  354M 0s
+  5600K .......... .......... .......... .......... .......... 55%  372M 0s
+  5650K .......... .......... .......... .......... .......... 56%  359M 0s
+  5700K .......... .......... .......... .......... .......... 56%  313M 0s
+  5750K .......... .......... .......... .......... .......... 57%  360M 0s
+  5800K .......... .......... .......... .......... .......... 57%  205M 0s
+  5850K .......... .......... .......... .......... .......... 58%  304M 0s
+  5900K .......... .......... .......... .......... .......... 58%  197M 0s
+  5950K .......... .......... .......... .......... .......... 59%  292M 0s
+  6000K .......... .......... .......... .......... .......... 59%  187M 0s
+  6050K .......... .......... .......... .......... .......... 60% 34.1M 0s
+  6100K .......... .......... .......... .......... .......... 60% 50.1M 0s
+  6150K .......... .......... .......... .......... .......... 61% 73.6M 0s
+  6200K .......... .......... .......... .......... .......... 61% 69.7M 0s
+  6250K .......... .......... .......... .......... .......... 62% 73.9M 0s
+  6300K .......... .......... .......... .......... .......... 62% 62.6M 0s
+  6350K .......... .......... .......... .......... .......... 63% 74.1M 0s
+  6400K .......... .......... .......... .......... .......... 63% 68.4M 0s
+  6450K .......... .......... .......... .......... .......... 64% 2.40M 0s
+  6500K .......... .......... .......... .......... .......... 64%  171M 0s
+  6550K .......... .......... .......... .......... .......... 65% 52.1M 0s
+  6600K .......... .......... .......... .......... .......... 65%  179M 0s
+  6650K .......... .......... .......... .......... .......... 66%  194M 0s
+  6700K .......... .......... .......... .......... .......... 66% 21.7M 0s
+  6750K .......... .......... .......... .......... .......... 67% 37.3M 0s
+  6800K .......... .......... .......... .......... .......... 67% 54.3M 0s
+  6850K .......... .......... .......... .......... .......... 68%  176M 0s
+  6900K .......... .......... .......... .......... .......... 68% 9.64M 0s
+  6950K .......... .......... .......... .......... .......... 69% 38.8M 0s
+  7000K .......... .......... .......... .......... .......... 69% 15.4M 0s
+  7050K .......... .......... .......... .......... .......... 70% 85.0M 0s
+  7100K .......... .......... .......... .......... .......... 70%  223M 0s
+  7150K .......... .......... .......... .......... .......... 71%  235M 0s
+  7200K .......... .......... .......... .......... .......... 71%  375M 0s
+  7250K .......... .......... .......... .......... .......... 72%  320M 0s
+  7300K .......... .......... .......... .......... .......... 72%  197M 0s
+  7350K .......... .......... .......... .......... .......... 73%  208M 0s
+  7400K .......... .......... .......... .......... .......... 73%  260M 0s
+  7450K .......... .......... .......... .......... .......... 74%  254M 0s
+  7500K .......... .......... .......... .......... .......... 74%  290M 0s
+  7550K .......... .......... .......... .......... .......... 75%  372M 0s
+  7600K .......... .......... .......... .......... .......... 75%  314M 0s
+  7650K .......... .......... .......... .......... .......... 76%  368M 0s
+  7700K .......... .......... .......... .......... .......... 76%  314M 0s
+  7750K .......... .......... .......... .......... .......... 77%  354M 0s
+  7800K .......... .......... .......... .......... .......... 77%  376M 0s
+  7850K .......... .......... .......... .......... .......... 78%  370M 0s
+  7900K .......... .......... .......... .......... .......... 78%  308M 0s
+  7950K .......... .......... .......... .......... .......... 79%  374M 0s
+  8000K .......... .......... .......... .......... .......... 79%  357M 0s
+  8050K .......... .......... .......... .......... .......... 80%  378M 0s
+  8100K .......... .......... .......... .......... .......... 80%  313M 0s
+  8150K .......... .......... .......... .......... .......... 80% 1.29M 0s
+  8200K .......... .......... .......... .......... .......... 81% 58.9M 0s
+  8250K .......... .......... .......... .......... .......... 81% 74.6M 0s
+  8300K .......... .......... .......... .......... .......... 82% 10.0M 0s
+  8350K .......... .......... .......... .......... .......... 82% 19.6M 0s
+  8400K .......... .......... .......... .......... .......... 83%  193M 0s
+  8450K .......... .......... .......... .......... .......... 83%  189M 0s
+  8500K .......... .......... .......... .......... .......... 84%  182M 0s
+  8550K .......... .......... .......... .......... .......... 84%  249M 0s
+  8600K .......... .......... .......... .......... .......... 85%  281M 0s
+  8650K .......... .......... .......... .......... .......... 85% 53.5M 0s
+  8700K .......... .......... .......... .......... .......... 86% 33.5M 0s
+  8750K .......... .......... .......... .......... .......... 86% 35.0M 0s
+  8800K .......... .......... .......... .......... .......... 87% 57.1M 0s
+  8850K .......... .......... .......... .......... .......... 87% 35.2M 0s
+  8900K .......... .......... .......... .......... .......... 88% 36.6M 0s
+  8950K .......... .......... .......... .......... .......... 88% 36.2M 0s
+  9000K .......... .......... .......... .......... .......... 89%  111M 0s
+  9050K .......... .......... .......... .......... .......... 89%  285M 0s
+  9100K .......... .......... .......... .......... .......... 90%  344M 0s
+  9150K .......... .......... .......... .......... .......... 90%  308M 0s
+  9200K .......... .......... .......... .......... .......... 91%  356M 0s
+  9250K .......... .......... .......... .......... .......... 91%  194M 0s
+  9300K .......... .......... .......... .......... .......... 92%  211M 0s
+  9350K .......... .......... .......... .......... .......... 92%  361M 0s
+  9400K .......... .......... .......... .......... .......... 93%  355M 0s
+  9450K .......... .......... .......... .......... .......... 93%  309M 0s
+  9500K .......... .......... .......... .......... .......... 94%  298M 0s
+  9550K .......... .......... .......... .......... .......... 94%  370M 0s
+  9600K .......... .......... .......... .......... .......... 95%  345M 0s
+  9650K .......... .......... .......... .......... .......... 95%  310M 0s
+  9700K .......... .......... .......... .......... .......... 96%  348M 0s
+  9750K .......... .......... .......... .......... .......... 96%  364M 0s
+  9800K .......... .......... .......... .......... .......... 97%  369M 0s
+  9850K .......... .......... .......... .......... .......... 97%  316M 0s
+  9900K .......... .......... .......... .......... .......... 98%  356M 0s
+  9950K .......... .......... .......... .......... .......... 98%  368M 0s
+ 10000K .......... .......... .......... .......... .......... 99%  378M 0s
+ 10050K .......... .......... .......... .......... .......... 99%  318M 0s
+ 10100K .......... .......... ....                            100% 59.7M=0.2s
+
+2020-10-23 17:54:29 (56.2 MB/s) - ‘./pw-data/201701scripts_sample.json.gz’ saved [10367709/10367709]
+
+--2020-10-23 17:54:29--  http://dataincubator-wqu.s3.amazonaws.com/pwdata/practices.json.gz
+Resolving dataincubator-wqu.s3.amazonaws.com (dataincubator-wqu.s3.amazonaws.com)... 52.217.82.68
+Connecting to dataincubator-wqu.s3.amazonaws.com (dataincubator-wqu.s3.amazonaws.com)|52.217.82.68|:80... connected.
+HTTP request sent, awaiting response... 200 OK
+Length: 402461 (393K) [application/json]
+Saving to: ‘./pw-data/practices.json.gz’
+
+     0K .......... .......... .......... .......... .......... 12% 36.8M 0s
+    50K .......... .......... .......... .......... .......... 25% 46.6M 0s
+   100K .......... .......... .......... .......... .......... 38% 51.9M 0s
+   150K .......... .......... .......... .......... .......... 50% 46.6M 0s
+   200K .......... .......... .......... .......... .......... 63% 43.1M 0s
+   250K .......... .......... .......... .......... .......... 76% 61.9M 0s
+   300K .......... .......... .......... .......... .......... 89% 73.7M 0s
+   350K .......... .......... .......... .......... ...       100% 64.2M=0.008s
+
+2020-10-23 17:54:29 (50.5 MB/s) - ‘./pw-data/practices.json.gz’ saved [402461/402461]
+
+Loading the data
+The first step of the project is to read in the data. We will discuss reading and writing various kinds of files later in the course, but the code below should get you started.
+
+import gzip
+import simplejson as json
+with gzip.open('./pw-data/201701scripts_sample.json.gz', 'rb') as f:
+    scripts = json.load(f)
+​
+with gzip.open('./pw-data/practices.json.gz', 'rb') as f:
+    practices = json.load(f)
+This data set comes from Britain's National Health Service. The scripts variable is a list of prescriptions issued by NHS doctors. Each prescription is represented by a dictionary with various data fields: 'practice', 'bnf_code', 'bnf_name', 'quantity', 'items', 'nic', and 'act_cost'.
+
+scripts[:2]
+[{'bnf_code': '0101010G0AAABAB',
+  'items': 2,
+  'practice': 'N81013',
+  'bnf_name': 'Co-Magaldrox_Susp 195mg/220mg/5ml S/F',
+  'nic': 5.98,
+  'act_cost': 5.56,
+  'quantity': 1000},
+ {'bnf_code': '0101021B0AAAHAH',
+  'items': 1,
+  'practice': 'N81013',
+  'bnf_name': 'Alginate_Raft-Forming Oral Susp S/F',
+  'nic': 1.95,
+  'act_cost': 1.82,
+  'quantity': 500}]
+A glossary of terms and FAQ is available from the NHS regarding the data. Below we supply a data dictionary briefly describing what these fields mean.
+
+Data field	Description
+'practice'	Code designating the medical practice issuing the prescription
+'bnf_code'	British National Formulary drug code
+'bnf_name'	British National Formulary drug name
+'quantity'	Number of capsules/quantity of liquid/grams of powder prescribed
+'items'	Number of refills (e.g. if 'quantity' is 30 capsules, 3 'items' means 3 bottles of 30 capsules)
+'nic'	Net ingredient cost
+'act_cost'	Total cost including containers, fees, and discounts
+The practices variable is a list of member medical practices of the NHS. Each practice is represented by a dictionary containing identifying information for the medical practice. Most of the data fields are self-explanatory. Notice the values in the 'code' field of practices match the values in the 'practice' field of scripts.
+
+practices[:2]
+[{'code': 'A81001',
+  'name': 'THE DENSHAM SURGERY',
+  'addr_1': 'THE HEALTH CENTRE',
+  'addr_2': 'LAWSON STREET',
+  'borough': 'STOCKTON ON TEES',
+  'village': 'CLEVELAND',
+  'post_code': 'TS18 1HU'},
+ {'code': 'A81002',
+  'name': 'QUEENS PARK MEDICAL CENTRE',
+  'addr_1': 'QUEENS PARK MEDICAL CTR',
+  'addr_2': 'FARRER STREET',
+  'borough': 'STOCKTON ON TEES',
+  'village': 'CLEVELAND',
+  'post_code': 'TS18 2AW'}]
+In the following questions we will ask you to explore this data set. You may need to combine pieces of the data set together in order to answer some questions. Not every element of the data set will be used in answering the questions.
+
+Question 1: summary_statistics
+Our beneficiary data (scripts) contains quantitative data on the number of items dispensed ('items'), the total quantity of item dispensed ('quantity'), the net cost of the ingredients ('nic'), and the actual cost to the patient ('act_cost'). Whenever working with a new data set, it can be useful to calculate summary statistics to develop a feeling for the volume and character of the data. This makes it easier to spot trends and significant features during further stages of analysis.
+
+Calculate the sum, mean, standard deviation, and quartile statistics for each of these quantities. Format your results for each quantity as a list: [sum, mean, standard deviation, 1st quartile, median, 3rd quartile]. We'll create a tuple with these lists for each quantity as a final result.
+
+def describe(key):
+    N = len(scripts)
+    total = sum([script[key] for script in scripts])
+    avg = total / N
+    var = sum([(script[key] - avg) ** 2 for script in scripts]) / (N - 1)
+    s = var ** 0.5
+    vals = sorted([script[key] for script in scripts])
+    q25 = vals[N // 4]
+    med = vals[N // 2]
+    q75 = vals[-N // 4]
+    
+    return (total, avg, s, q25, med, q75)
+summary = [('items', describe('items')),
+           ('quantity', describe('quantity')),
+           ('nic', describe('nic')),
+           ('act_cost', describe('act_cost'))]
+grader.score.pw__summary_statistics(summary)
+==================
+Your score:  1.0
+==================
+Question 2: most_common_item
+Often we are not interested only in how the data is distributed in our entire data set, but within particular groups -- for example, how many items of each drug (i.e. 'bnf_name') were prescribed? Calculate the total items prescribed for each 'bnf_name'. What is the most commonly prescribed 'bnf_name' in our data?
+
+To calculate this, we first need to split our data set into groups corresponding with the different values of 'bnf_name'. Then we can sum the number of items dispensed within in each group. Finally we can find the largest sum.
+
+We'll use 'bnf_name' to construct our groups. You should have 5619 unique values for 'bnf_name'.
+
+bnf_names = {script['bnf_name'] for script in scripts}
+assert(len(bnf_names) == 5619)
+We want to construct "groups" identified by 'bnf_name', where each group is a collection of prescriptions (i.e. dictionaries from scripts). We'll construct a dictionary called groups, using bnf_names as the keys. We'll represent a group with a list, since we can easily append new members to the group. To split our scripts into groups by 'bnf_name', we should iterate over scripts, appending prescription dictionaries to each group as we encounter them.
+
+groups = {name: [] for name in bnf_names}
+​
+for script in scripts:
+    bnf_name = script['bnf_name']
+    groups[bnf_name].append(script)
+all([True if script['bnf_name'] == 'Nexium_Tab 40mg' else False for script in groups['Nexium_Tab 40mg']])
+True
+items_bnf_name = []
+​
+for bnf_name, scripts_ in groups.items():
+    total = sum([script['items'] for script in scripts_])
+    items_bnf_name.append((bnf_name, total))
+sorted(items_bnf_name, key=lambda tup: tup[1], reverse = True)
+sorted(items_bnf_name, key=lambda tup: tup[1], reverse = True)
+Now that we've constructed our groups we should sum up 'items' in each group and find the 'bnf_name' with the largest sum. The result, max_item, should have the form [(bnf_name, item total)], e.g. [('Foobar', 2000)].
+
+item
+max_item = [max(items_bnf_name, key=lambda x: x[1])]
+max_item
+[('Omeprazole_Cap E/C 20mg', 113826)]
+TIP: If you are getting an error from the grader below, please make sure your answer conforms to the correct format of [(bnf_name, item total)].
+
+grader.score.pw__most_common_item(max_item)
+==================
+Your score:  1.0
+==================
+Challenge: Write a function that constructs groups as we did above. The function should accept a list of dictionaries (e.g. scripts or practices) and a tuple of fields to groupby (e.g. ('bnf_name') or ('bnf_name', 'post_code')) and returns a dictionary of groups. The following questions will require you to aggregate data in groups, so this could be a useful function for the rest of the miniproject.
+
+def group_by_field(data, fields):
+    groups = {}
+    
+    for d in data:
+        key = tuple(d[f] for f in fields)
+        if key in groups:
+            groups[key].append(d)
+        else:
+            groups[key] = [d]
+    
+    return groups
+def sum_values(data, key):
+    """returns sum of all values of a given key"""
+    return sum([d[key] for d in data]) 
+[(group, sum_values(scripts_, 'items')) for group, scripts_ in groups.items()]
+groups = group_by_field(scripts, ('bnf_name',))
+test_max_item = ...
+​
+assert test_max_item == max_item
+---------------------------------------------------------------------------
+AssertionError                            Traceback (most recent call last)
+<ipython-input-28-f139006cdbad> in <module>()
+      2 test_max_item = ...
+      3 
+----> 4 assert test_max_item == max_item
+
+AssertionError: 
+
+Question 3: postal_totals
+Our data set is broken up among different files. This is typical for tabular data to reduce redundancy. Each table typically contains data about a particular type of event, processes, or physical object. Data on prescriptions and medical practices are in separate files in our case. If we want to find the total items prescribed in each postal code, we will have to join our prescription data (scripts) to our clinic data (practices).
+
+Find the total items prescribed in each postal code, representing the results as a list of tuples (post code, total items prescribed). Sort your results ascending alphabetically by post code and take only results from the first 100 post codes. Only include post codes if there is at least one prescription from a practice in that post code.
+
+NOTE: Some practices have multiple postal codes associated with them. Use the alphabetically first postal code.
+
+We can join scripts and practices based on the fact that 'practice' in scripts matches 'code' in practices. However, we must first deal with the repeated values of 'code' in practices. We want the alphabetically first postal codes.
+
+scripts[0]
+{'bnf_code': '0101010G0AAABAB',
+ 'items': 2,
+ 'practice': 'N81013',
+ 'bnf_name': 'Co-Magaldrox_Susp 195mg/220mg/5ml S/F',
+ 'nic': 5.98,
+ 'act_cost': 5.56,
+ 'quantity': 1000}
+0
+practices[0]
+{'code': 'A81001',
+ 'name': 'THE DENSHAM SURGERY',
+ 'addr_1': 'THE HEALTH CENTRE',
+ 'addr_2': 'LAWSON STREET',
+ 'borough': 'STOCKTON ON TEES',
+ 'village': 'CLEVELAND',
+ 'post_code': 'TS18 1HU'}
+print(f"Number of practices total: {len(practices)}")
+print(f"Number of unique practice codes: {len({p['code'] for p in practices})}")
+Number of practices total: 12020
+Number of unique practice codes: 10843
+practice_postal = {}
+​
+for practice in practices:
+    if practice['code'] in practice_postal:
+        practice_postal[practice['code']] = min(practice['post_code'], practice_postal[practice['code']])
+    else:
+        practice_postal[practice['code']] = practice['post_code']
+Challenge: This is an aggregation of the practice data grouped by practice codes. Write an alternative implementation of the above cell using the group_by_field function you defined previously.
+
+assert practice_postal['K82019'] == 'HP21 8TR'
+Now we can join practice_postal to scripts.
+
+joined = scripts[:] #create a copy of the list so that we don't change the original
+for script in joined:
+    practice_code = script['practice']
+    script['post_code'] = practice_postal[practice_code]
+Finally we'll group the prescription dictionaries in joined by 'post_code' and sum up the items prescribed in each group, as we did in the previous question.
+
+joined[:2]
+[{'bnf_code': '0101010G0AAABAB',
+  'items': 2,
+  'practice': 'N81013',
+  'bnf_name': 'Co-Magaldrox_Susp 195mg/220mg/5ml S/F',
+  'nic': 5.98,
+  'act_cost': 5.56,
+  'quantity': 1000,
+  'post_code': 'SK11 6JL'},
+ {'bnf_code': '0101021B0AAAHAH',
+  'items': 1,
+  'practice': 'N81013',
+  'bnf_name': 'Alginate_Raft-Forming Oral Susp S/F',
+  'nic': 1.95,
+  'act_cost': 1.82,
+  'quantity': 500,
+  'post_code': 'SK11 6JL'}]
+[0]
+grouped = group_by_field(joined, ('post_code',))
+postal_totals_all = [(post_code[0], sum_values(scripts_, 'items')) for post_code, scripts_ in grouped.items()]
+)
+postal_totals = sorted(postal_totals_all)[:100]
+postal_totals
+#postal_totals = [('B11 4BW', 20673)] * 100
+​
+grader.score.pw__postal_totals(postal_totals)
+==================
+Your score:  1.0
+==================
+Question 4: items_by_region
+Now we'll combine the techniques we've developed to answer a more complex question. Find the most commonly dispensed item in each postal code, representing the results as a list of tuples (post_code, bnf_name, amount dispensed as proportion of total). Sort your results ascending alphabetically by post code and take only results from the first 100 post codes.
+
+NOTE: We'll continue to use the joined variable we created before, where we've chosen the alphabetically first postal code for each practice. Additionally, some postal codes will have multiple 'bnf_name' with the same number of items prescribed for the maximum. In this case, we'll take the alphabetically first 'bnf_name'.
+
+Now we need to calculate the total items of each 'bnf_name' prescribed in each 'post_code'. Use the techniques we developed in the previous questions to calculate these totals. You should have 141196 ('post_code', 'bnf_name') groups.
+
+total_items_by_bnf_post
+total_items_by_bnf_post = group_by_field(joined, ('post_code', 'bnf_name'))
+assert len(total_items_by_bnf_post) == 141196
+total_items_by_bnf_post[('B11 4BW', 'Salbutamol_Inha 100mcg (200 D) CFF')]
+Let's use total_items to find the maximum item total for each postal code. To do this, we will want to regroup total_items_by_bnf_post by 'post_code' only, not by ('post_code', 'bnf_name'). First let's turn total_items into a list of dictionaries (similar to scripts or practices) and then group it by 'post_code'. You should have 118 groups in the resulting total_items_by_post after grouping total_items by 'post_code'.
+
+total_items = [(key, sum_values(val, 'items')) for key, val in total_items_by_bnf_post.items()]
+total_items[:5]
+[(('SK11 6JL', 'Co-Magaldrox_Susp 195mg/220mg/5ml S/F'), 5),
+ (('SK11 6JL', 'Alginate_Raft-Forming Oral Susp S/F'), 3),
+ (('SK11 6JL', 'Sod Algin/Pot Bicarb_Susp S/F'), 94),
+ (('SK11 6JL', 'Sod Alginate/Pot Bicarb_Tab Chble 500mg'), 9),
+ (('SK11 6JL', 'Gaviscon Infant_Sach 2g (Dual Pack) S/F'), 41)]
+total_items_by_bnf
+def construct_dict(key, val):
+    """Construct dictionary from our list of tuples"""
+    return {'post_code': key[0], 'bnf_name': key[1], 'total': val}
+​
+total_items_by_bnf = [construct_dict(key, val) for key, val in total_items]
+total_items_by_bnf[0]
+{'post_code': 'SK11 6JL',
+ 'bnf_name': 'Co-Magaldrox_Susp 195mg/220mg/5ml S/F',
+ 'total': 5}
+grouped_by_post_code
+grouped_by_post_code = group_by_field(total_items_by_bnf, ('post_code',))
+total_by_items_by_post = [(key[0], sum_values(val, 'total')) for key, val in grouped_by_post_code.items()]
+ ==118
+assert len(total_by_items_by_post) ==118
+Now we will aggregate the groups in total_by_item_post to create max_item_by_post. Some 'bnf_name' have the same item total within a given postal code. Therefore, if more than one 'bnf_name' has the maximum item total in a given postal code, we'll take the alphabetically first 'bnf_name'. We can do this by sorting each group according to the item total and 'bnf_name'.
+
+sorted(grouped_by_post_code[('B11 4BW',)], key=lambda tup: (tup['total'], tup['bnf_name']), reverse = True)[:2]
+[{'post_code': 'B11 4BW',
+  'bnf_name': 'Salbutamol_Inha 100mcg (200 D) CFF',
+  'total': 706},
+ {'post_code': 'B11 4BW', 'bnf_name': 'Paracet_Tab 500mg', 'total': 451}]
+max_item_by_post = [sorted(val, key=lambda x: x['total'], reverse=True)[0] for val in grouped_by_post_code.values()]
+In order to express the item totals as a proportion of the total amount of items prescribed across all 'bnf_name' in a postal code, we'll need to use the total items prescribed that we previously calculated as items_by_post. Calculate the proportions for the most common 'bnf_names' for each postal code. Format your answer as a list of tuples: [(post_code, bnf_name, total)]
+
+total_by_items_by_post[:5]
+[('SK11 6JL', 110071),
+ ('CW5 5NX', 38797),
+ ('CW1 3AW', 64104),
+ ('CW7 1AT', 43164),
+ ('CH65 6TG', 25090)]
+total_by_items_by_post_dict
+total_by_items_by_post_dict = dict(total_by_items_by_post)
+items_by_region_all = [(x['post_code'], x['bnf_name'], x['total'] / total_by_items_by_post_dict[x['post_code']]) for x in max_item_by_post]
+5
+items_by_region_all[:5]
+[('SK11 6JL', 'Omeprazole_Cap E/C 20mg', 0.029244760200234393),
+ ('CW5 5NX', 'Omeprazole_Cap E/C 20mg', 0.036574992911823076),
+ ('CW1 3AW', 'Omeprazole_Cap E/C 20mg', 0.03687757394234369),
+ ('CW7 1AT', 'Omeprazole_Cap E/C 20mg', 0.038342136965990176),
+ ('CH65 6TG', 'Lansoprazole_Cap 30mg (E/C Gran)', 0.027421283379832604)]
+items_by_region = sorted(items_by_region_all)[:100]
+grader.score.pw__items_by_region(items_by_region)
+==================
+Your score:  1.0
+==================
