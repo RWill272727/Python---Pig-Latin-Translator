@@ -1,0 +1,91 @@
+#1. Load and clean data
+#2. Flag opioids
+#3. Perform merges and data analysis
+#4. Sort and find suspicious
+
+#clean code separate, but not as a function
+import pandas as pd
+
+#bring in scripts and practices data
+scripts = pd.read_csv('dw-data/201701scripts_sample.csv.gz')
+col_names = [ 'code', 'name', 'addr_1', 'addr_2', 'borough', 'village', 'post_code']
+practices = pd.read_csv('dw-data/practices.csv.gz', names=col_names)
+
+#bring in chem data
+chem = pd.read_csv('dw-data/chem.csv.gz')
+chem = chem.sort_values('CHEM SUB').drop_duplicates(subset='CHEM SUB', keep='first')
+
+#find the scripts where chem is opioid
+opioids = ['morphine', 'oxycodone', 'methadone', 'fentanyl', 'pethidine', 'buprenorphine', 'propoxyphene', 'codeine']
+chem['is_opioid'] = chem['NAME'].str.lower().str.contains(r'|'.join(opioids))
+scripts_with_chem = (scripts.merge(chem[['CHEM SUB', 'is_opioid']], left_on='bnf_code', right_on='CHEM SUB', how='left').fillna(False))
+
+#find opioids per practice, std, and z-score
+opioids_per_practice = scripts_with_chem.groupby('practice')['is_opioid'].mean()
+relative_opioids_per_practice = opioids_per_practice - scripts_with_chem['is_opioid'].mean()
+standard_error_per_practice = scripts_with_chem['is_opioid'].std() / (scripts_with_chem['practice'].value_counts() ** 0.5)
+opioid_scores = relative_opioids_per_practice / standard_error_per_practice
+opioid_scores.name = 'z-score'
+
+#find practices with highest z-score
+unique_practices = practices.sort_values('name').drop_duplicates(subset='code', keep='first')
+unique_practices = unique_practices.set_index('code')
+unique_practices['z-score'] = opioid_scores
+unique_practices['count'] = scripts['practice'].value_counts()
+unique_practices = unique_practices.sort_values('z-score', ascending=False)
+results = unique_practices[['name', 'z-score', 'count']].head(100)
+
+
+#clean code as a function
+import pandas as pd
+
+def load_and_clean():
+  
+  scripts = pd.read_csv('dw-data/201701scripts_sample.csv.gz')
+  
+  col_names = [ 'code', 'name', 'addr_1', 'addr_2', 'borough', 'village', 'post_code']
+  practices = pd.read_csv('dw-data/practices.csv.gz', names=col_names)
+  
+  chem = pd.read_csv('dw-data/chem.csv.gz')
+  chem = chem.sort_values('CHEM SUB').drop_duplicates(subset='CHEM SUB', keep='first')
+  
+  return scripts, practices, chem
+  
+def flag_opioids(chem):
+
+  chem = chem.copy()
+  
+  opioids = ['morphine', 'oxycodone', 'methadone', 'fentanyl', 'pethidine', 'buprenorphine', 'propoxyphene', 'codeine']
+  chem['is_opioid'] = chem['NAME'].str.lower().str.contains(r'|'.join(opioids))
+  
+  return chem
+  
+def calculate_z_score(scripts, chem):
+  
+  scripts_with_chem = (scripts.merge(chem[['CHEM SUB', 'is_opioid']], left_on='bnf_code', right_on='CHEM SUB', how='left').fillna(False))
+  
+  opioids_per_practice = scripts_with_chem.groupby('practice')['is_opioid'].mean()
+  relative_opioids_per_practice = opioids_per_practice - scripts_with_chem['is_opioid'].mean()
+  standard_error_per_practice = scripts_with_chem['is_opioid'].std() / (scripts_with_chem['practice'].value_counts() ** 0.5)
+  opioid_scores = relative_opioids_per_practice / standard_error_per_practice
+  
+  return opioid_score
+  
+def flag_practices(practices, scripts, opioid_score, z_score_cutoff=2):
+  unique_practices = practices.sort_values('name').drop_duplicates(subset='code', keep='first')
+  unique_practices = unique_practices.set_index('code')
+  unique_practices['z_score'] = opioid_scores
+  unique_practices['count'] = scripts['practice'].value_counts()
+  
+  result = unique_practices = unique_practices.sort_values('z_score', ascending=False)
+  result.query('z_score > @z_score_cutoff')
+  
+#run it
+if __name__ == '__main__':
+  scripts, practices, chem = load_and_clean()
+  chem = flag_opioids(chem)
+  opioid_score = calculate_z_score(scripts, chem)
+  anomalous_practices = flag_practices(practices, scripts, opioid_score, z_score_cutoff=3)
+  
+anomalous_practices.shape  
+anomalous_practices.head() 
