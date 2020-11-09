@@ -1,0 +1,242 @@
+%logstop
+%logstart -rtq ~/.logs/dw.py append
+%matplotlib inline
+import matplotlib
+import seaborn as sns
+sns.set()
+matplotlib.rcParams['figure.dpi'] = 144
+from static_grader import grader
+DW Miniproject
+Introduction
+The objective of this miniproject is to exercise your ability to wrangle tabular data set and aggregate large data sets into meaningful summary statistics. We'll work with the same medical data used in the pw miniproject but leverage the power of Pandas to more efficiently represent and act on our data.
+
+Downloading the data
+We first need to download the data we'll be using from Amazon S3:
+Loading the data
+Similar to the PW miniproject, the first step is to read in the data. The data files are stored as compressed CSV files. You can load the data into a Pandas DataFrame by making use of the gzip package to decompress the files and Panda's read_csv methods to parse the data into a DataFrame. You may want to check the Pandas documentation for parsing CSV files for reference.
+
+For a description of the data set please, refer to the PW miniproject. Note that all questions make use of the 2017 data only, except for Question 5 which makes use of both the 2017 and 2016 data.
+
+import pandas as pd
+import numpy as np
+import gzip
+# load the 2017 data
+scripts = pd.read_csv('dw-data/201701scripts_sample.csv.gz')
+scripts.head()
+col_names = [ 'code', 'name', 'addr_1', 'addr_2', 'borough', 'village', 'post_code']
+practices = pd.read_csv('dw-data/practices.csv.gz', names=col_names)
+practices.head()
+chem = pd.read_csv('dw-data/chem.csv.gz')
+chem.head()
+Now that we've loaded in the data, let's first replicate our results from the PW miniproject. Note that we are now working with a larger data set so the answers will be different than in the PW miniproject even if the analysis is the same.
+
+Question 1: summary_statistics
+In the PW miniproject we first calculated the total, mean, standard deviation, and quartile statistics of the 'items', 'quantity'', 'nic', and 'act_cost' fields. To do this we had to write some functions to calculate the statistics and apply the functions to our data structure. The DataFrame has a describe method that will calculate most (not all) of these things for us.
+
+Submit the summary statistics to the grader as a list of tuples: [('act_cost', (total, mean, std, q25, median, q75)), ...]
+
+summary_stats = [('items', (8.888304e6, 9.133136, 29.2, 1, 2, 6)), ('quantity', (7.21457e8, 741.329835, 3665.426958, 28, 100, 350)), ('nic', (7.110042e7, 73.058915, 188.070257, 7.8, 22.64, 65)), ('act_cost', (6.61641e7, 67.986613, 174.401703, 7.33, 21.22, 60.67))]
+stats = scripts.describe().T
+totals = scripts[['items', 'quantity', 'nic', 'act_cost']].sum()
+stats['total'] = totals
+stats
+grader.score.dw__summary_statistics(summary_stats)
+Question 2: most_common_item
+We can also easily compute summary statistics on groups within the data. In the pw miniproject we had to explicitly construct the groups based on the values of a particular field. Pandas will handle that for us via the groupby method. This process is detailed in the Pandas documentation.
+
+Use groupby to calculate the total number of items dispensed for each 'bnf_name'. Find the item with the highest total and return the result as [(bnf_name, total)].
+
+grouped = scripts.groupby('bnf_name')
+bnf_total = grouped['items'].sum()
+sorted = bnf_total.sort_values(ascending=False)
+sorted.head()
+most_common_item = [(bnf_total.idxmax(), bnf_total.max())]
+grader.score.dw__most_common_item(most_common_item)
+Question 3: items_by_region
+Now let's find the most common item by post code. The post code information is in the practices DataFrame, and we'll need to merge it into the scripts DataFrame. Pandas provides extensive documentation with diagrammed examples on different methods and approaches for joining data. The merge method is only one of many possible options.
+
+Return your results as a list of tuples (post code, item name, amount dispensed as % of total). Sort your results ascending alphabetically by post code and take only results from the first 100 post codes.
+
+NOTE: Some practices have multiple postal codes associated with them. Use the alphabetically first postal code. Note some postal codes may have multiple 'bnf_name' with the same prescription rate for the maximum. In this case, take the alphabetically first 'bnf_name' (as in the PW miniproject).
+
+print(f"Number of practices: {practices.shape[0]}")
+print(f"Number of unique practices: {practices['code'].nunique()}")
+practices_sorted = practices.sort_values('post_code')
+practices_unique = practices_sorted.drop_duplicates(subset='code', keep='first')
+scripts_with_post_code = scripts.merge(practices_unique, left_on='practice', right_on='code', how='left')
+output = (scripts_with_post_code.groupby(['post_code', 'bnf_name'])['items'].sum().reset_index().set_index('post_code'))
+output.head()
+total = output.groupby('post_code')['items'].sum()
+total.head()
+output['total'] = total
+output.head()
+output['ratio'] = output['items'] / output['total'] 
+output.head()
+result = output.groupby('post_code').apply(lambda df: df.sort_values('ratio', ascending=False).iloc[0])
+result[:100]
+output.nlargest(5, 'ratio')
+answer = result.reset_index()[['post_code', 'bnf_name', 'ratio']].sort_values('post_code').head(100)
+items_by_region = [("B11 4BW", "Salbutamol_Inha 100mcg (200 D) CFF", 0.0310589063)] * 100
+grader.score.dw__items_by_region(answer)
+Question 4: script_anomalies
+Drug abuse is a source of human and monetary costs in health care. A first step in identifying practitioners that enable drug abuse is to look for practices where commonly abused drugs are prescribed unusually often. Let's try to find practices that prescribe an unusually high amount of opioids. The opioids we'll look for are given in the list below.
+
+opioids = ['morphine', 'oxycodone', 'methadone', 'fentanyl', 'pethidine', 'buprenorphine', 'propoxyphene', 'codeine']
+These are generic names for drugs, not brand names. Generic drug names can be found using the 'bnf_code' field in scripts along with the chem table.. Use the list of opioids provided above along with these fields to make a new field in the scripts data that flags whether the row corresponds with a opioid prescription.
+
+chem.head()
+chem = chem.sort_values('CHEM SUB').drop_duplicates(subset='CHEM SUB', keep='first')
+chem.shape
+practices.head()
+scripts.head()
+scripts_and_chem = scripts.merge(chem, left_on='bnf_code', right_on='CHEM SUB', how='inner')
+scripts_and_chem.head()
+scripts_and_chem.shape
+any([opioid in scripts_and_chem.loc[0, 'NAME'] for opioid in opioids])
+scripts_and_chem['is_opioid'] = scripts_and_chem['NAME'].str.lower().isin(opioids)
+scripts_and_chem[scripts_and_chem['is_opioid']]
+#do it another way
+chem['is_opioid'] = chem['NAME'].str.lower().isin(opioids)
+scripts_and_chem = scripts.merge(chem[['CHEM SUB', 'is_opioid']], left_on='bnf_code', right_on='CHEM SUB', how='left')
+scripts_and_chem.head()
+scripts_and_chem['is_opioid'] = scripts_and_chem['is_opioid'].fillna(False)
+scripts_and_chem['is_opioid'].isnull().sum()
+opioids_per_practice = scripts_and_chem.groupby('practice')['is_opioid'].mean()
+opioids_per_practice.head()
+relative_opioids_per_practice = opioids_per_practice - scripts_and_chem['is_opioid'].mean()
+practices_updated = scripts_and_chem.merge(practices_unique, left_on='practice', right_on='code', how='inner')
+practices_updated.head()
+Now for each practice calculate the proportion of its prescriptions containing opioids.
+
+Hint: Consider the following list: [0, 1, 1, 0, 0, 0]. What proportion of the entries are 1s? What is the mean value?
+
+How do these proportions compare to the overall opioid prescription rate? Subtract off the proportion of all prescriptions that are opioids from each practice's proportion.
+
+Now that we know the difference between each practice's opioid prescription rate and the overall rate, we can identify which practices prescribe opioids at above average or below average rates. However, are the differences from the overall rate important or just random deviations? In other words, are the differences from the overall rate big or small?
+
+To answer this question we have to quantify the difference we would typically expect between a given practice's opioid prescription rate and the overall rate. This quantity is called the standard error, and is related to the standard deviation, σσ. The standard error in this case is
+
+σn⎯⎯√
+σn
+where nn is the number of prescriptions each practice made. Calculate the standard error for each practice. Then divide relative_opioids_per_practice by the standard errors. We'll call the final result opioid_scores.
+
+scripts_and_chem.groupby('practice')['is_opioid'].count().sort_values(ascending=False)
+#do it another way (number of times each unique value of a column appears) Similar to nunique. This is sorted
+scripts_and_chem['practice'].value_counts()
+standard_error_per_practice = scripts_and_chem['is_opioid'].std() / scripts_and_chem['practice'].value_counts() ** 0.5
+opioid_scores = relative_opioids_per_practice / standard_error_per_practice
+opioid_scores.name = 'z-score'
+The quantity we have calculated in opioid_scores is called a z-score:
+
+X¯−μσ2/n⎯⎯⎯⎯⎯⎯⎯√
+X¯−μσ2/n
+Here X¯X¯ corresponds with the proportion for each practice, μμ corresponds with the proportion across all practices, σ2σ2 corresponds with the variance of the proportion across all practices, and nn is the number of prescriptions made by each practice. Notice X¯X¯ and nn will be different for each practice, while μμ and σσ are determined across all prescriptions, and so are the same for every z-score. The z-score is a useful statistical tool used for hypothesis testing, finding outliers, and comparing data about different types of objects or events.
+
+Now that we've calculated this statistic, take the 100 practices with the largest z-score. Return your result as a list of tuples in the form (practice_name, z-score, number_of_scripts). Sort your tuples by z-score in descending order. Note that some practice codes will correspond with multiple names. In this case, use the first match when sorting names alphabetically.
+
+unique_practices = practices.sort_values('name').drop_duplicates(subset='code', keep='first')
+unique_practices_code = unique_practices.merge(opioid_scores, left_on='code', right_index=True)
+#add z-score as a column a different way
+unique_practices = unique_practices.set_index('code')
+unique_practices['z-score'] = opioid_scores
+unique_practices.head()
+scripts.groupby('practice').count()['bnf_code']
+#different way that's sorted below
+unique_practices['count'] = scripts['practice'].value_counts()
+unique_practices = unique_practices.sort_values('z-score', ascending=False)
+unique_practices.head()
+results = unique_practices[['name', 'z-score', 'count']].head(100)
+results.head()
+unique_practices.query('name== "NATIONAL ENHANCED SERVICE"')
+#clean code
+import pandas as pd
+​
+#bring in scripts and practices data
+scripts = pd.read_csv('dw-data/201701scripts_sample.csv.gz')
+col_names = [ 'code', 'name', 'addr_1', 'addr_2', 'borough', 'village', 'post_code']
+practices = pd.read_csv('dw-data/practices.csv.gz', names=col_names)
+​
+#bring in chem data
+chem = pd.read_csv('dw-data/chem.csv.gz')
+chem = chem.sort_values('CHEM SUB').drop_duplicates(subset='CHEM SUB', keep='first')
+​
+#find the scripts where chem is opioid
+opioids = ['morphine', 'oxycodone', 'methadone', 'fentanyl', 'pethidine', 'buprenorphine', 'propoxyphene', 'codeine']
+chem['is_opioid'] = chem['NAME'].str.lower().str.contains(r'|'.join(opioids))
+scripts_with_chem = (scripts.merge(chem[['CHEM SUB', 'is_opioid']], left_on='bnf_code', right_on='CHEM SUB', how='left').fillna(False))
+​
+#find opioids per practice, std, and z-score
+opioids_per_practice = scripts_with_chem.groupby('practice')['is_opioid'].mean()
+relative_opioids_per_practice = opioids_per_practice - scripts_with_chem['is_opioid'].mean()
+standard_error_per_practice = scripts_with_chem['is_opioid'].std() / (scripts_with_chem['practice'].value_counts() ** 0.5)
+opioid_scores = relative_opioids_per_practice / standard_error_per_practice
+opioid_scores.name = 'z-score'
+​
+#find practices with highest z-score
+unique_practices = practices.sort_values('name').drop_duplicates(subset='code', keep='first')
+unique_practices = unique_practices.set_index('code')
+unique_practices['z-score'] = opioid_scores
+unique_practices['count'] = scripts['practice'].value_counts()
+unique_practices = unique_practices.sort_values('z-score', ascending=False)
+results = unique_practices[['name', 'z-score', 'count']].head(100)
+grader.score.dw__script_anomalies(results)
+Question 5: script_growth
+Another way to identify anomalies is by comparing current data to historical data. In the case of identifying sites of drug abuse, we might compare a practice's current rate of opioid prescription to their rate 5 or 10 years ago. Unless the nature of the practice has changed, the profile of drugs they prescribe should be relatively stable. We might also want to identify trends through time for business reasons, identifying drugs that are gaining market share. That's what we'll do in this question.
+
+We'll load in beneficiary data from 6 months earlier, June 2016, and calculate the percent growth in prescription rate from June 2016 to January 2017 for each bnf_name. We'll return the 50 items with largest growth and the 50 items with the largest shrinkage (i.e. negative percent growth) as a list of tuples sorted by growth rate in descending order in the format (script_name, growth_rate, raw_2016_count). You'll notice that many of the 50 fastest growing items have low counts of prescriptions in 2016. Filter out any items that were prescribed less than 50 times.
+
+#read the file
+scripts16 = pd.read_csv('dw-data/201606scripts_sample.csv.gz')
+#calculate the percent growth YoY 
+pct_growth = scripts['bnf_name'].value_counts() / scripts16['bnf_name'].value_counts() - 1
+pct_growth.name = 'pct_growth'
+#convert to data frame, assign column for raw count, query only values > 50, etc, and rename index
+result = (pct_growth.to_frame()
+         .assign(raw_count=scripts16['bnf_name'].value_counts())
+         .query('raw_count > 50')
+         .dropna()
+         .sort_values('pct_growth', ascending=False)
+         .reset_index()
+         .rename({'index': 'bnf_name'}, axis=1))
+#concat the top and bottom 50, format and submit
+script_growth = pd.concat([result.head(50), result.tail(50)])
+script_growth_ans = script_growth[['bnf_name','pct_growth', 'raw_count']]
+grader.score.dw__script_growth(script_growth)
+Question 6: rare_scripts
+Does a practice's prescription costs originate from routine care or from reliance on rarely prescribed treatments? Commonplace treatments can carry lower costs than rare treatments because of efficiencies in large-scale production. While some specialist practices can't help but avoid prescribing rare medicines because there are no alternatives, some practices may be prescribing a unnecessary amount of brand-name products when generics are available. Let's identify practices whose costs disproportionately originate from rarely prescribed items.
+
+First we have to identify which 'bnf_code' are rare. To do this, find the probability pp of a prescription having a particular 'bnf_code' if the 'bnf_code' was randomly chosen from the unique options in the beneficiary data. We will call a 'bnf_code' rare if it is prescribed at a rate less than 0.1p0.1p.
+
+scripts['bnf_code'].nunique()
+#Find rare prescriptions
+#Find uniform propability, find frequencies for each bnf code, flag bnf codes that are rare
+p = 1 / scripts['bnf_code'].nunique()
+rates = scripts['bnf_code'].value_counts() / len(scripts)
+rare_codes = rates < 0.1 * p #Boolean series
+scripts = scripts.set_index('bnf_code') # when we add columns to DF, they need to use the same set of indices
+scripts['rare'] = rare_codes
+rates.hist(bins=50)
+Now for each practice, calculate the proportion of costs that originate from prescription of rare treatments (i.e. rare 'bnf_code'). Use the 'act_cost' field for this calculation.
+
+#filter to only include rare, groupby practice, aggregate to calc sum of actual costs
+rare_cost_total = scripts.query('rare==True').groupby('practice')['act_cost'].sum()
+all_cost_total = scripts.groupby('practice')['act_cost'].sum()
+rare_cost_prop = (rare_cost_total / all_cost_total).fillna(0)
+rare_cost_prop.isnull().sum()
+Now we will calculate a z-score for each practice based on this proportion. First take the difference of rare_cost_prop and the proportion of costs originating from rare treatments across all practices.
+
+relative_rare_cost_prop = rare_cost_prop - scripts.query('rare==True')['act_cost'].sum() / scripts['act_cost'].sum()
+Now we will estimate the standard errors (i.e. the denominator of the z-score) by simply taking the standard deviation of this difference.
+
+standard_errors = relative_rare_cost_prop.std()
+Finally compute the z-scores. Return the practices with the top 100 z-scores in the form (post_code, practice_name, z-score). Note that some practice codes will correspond with multiple names. In this case, use the first match when sorting names alphabetically.
+
+rare_scores = relative_rare_cost_prop / standard_errors
+rare_scores.hist(bins=50)
+unique_practices['rare_scores'] = rare_scores
+rare_scripts = (unique_practices.sort_values('rare_scores', ascending=False)
+.reset_index()
+.loc[:, ['code', 'name', 'rare_scores']]
+.head(100))
+grader.score.dw__rare_scripts(rare_scripts)
+Copyright © 2020 The Data Incubator. All rights reserved.
